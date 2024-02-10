@@ -1,0 +1,6 @@
+.vscode/
+
+venv/
+
+# API keys
+OAI_CONFIG_LIST*
