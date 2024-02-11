@@ -1,9 +1,10 @@
 import dataclasses
 import json
 import os
-from typing import List, Optional, Self, Tuple
+from typing import List, Optional, Tuple
 
 from autogen import ConversableAgent
+from typing_extensions import Self
 
 from orchestration.data import ChatMessage, ConversationResult
 
