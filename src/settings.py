@@ -1,8 +1,8 @@
-import os
+from pathlib import Path
 
 
 class Settings:
-    WORK_DIR = os.getcwd()
-    CODE_DIR = os.path.join(WORK_DIR, "output")
-    TEST_DIR = os.path.join(WORK_DIR, "tests")
-    REQUIREMENTS_FILE = os.path.join(WORK_DIR, "requirements.txt")
+    WORK_DIR = Path.cwd() / "session"
+    CODE_DIR = WORK_DIR / "code"
+    TEST_DIR = WORK_DIR / "tests"
+    REQUIREMENTS_FILE = WORK_DIR / "requirements.txt"

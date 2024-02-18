@@ -1,12 +1,17 @@
+from __future__ import annotations
+
+import inspect
 import os
+import shutil
 import stat
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
-from typing import Annotated, Callable
+from pathlib import Path
+from typing import Annotated, List, get_type_hints
 
-from typing_extensions import Self
+from numpy import full
 
 from settings import Settings
 from skills.base import Skill, SkillSet
@@ -15,74 +20,145 @@ from skills.base import Skill, SkillSet
 class SafePathSkill(Skill, ABC):
     raise_on_404 = False
 
-    def __init__(self, work_dir: str = Settings.CODE_DIR, *args, **kwargs) -> None:
+    def __init__(self, work_dir: Path = Settings.CODE_DIR, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.work_dir = work_dir
 
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
+    def __init_subclass__(cls) -> None:
+        super().__init_subclass__()
 
-        # Automatically wrap the execute method of subclasses with path validation
-        original_execute = cls.execute
+        # Overwrite the execute method for the subclass
+        execute = cls._overwrite_execute()
+        setattr(cls, "execute", execute)
 
-        @wraps(original_execute)
-        def safe_execute(self, path: str, *args, **kwargs):
-            safe_path = self._validate_and_resolve_path(path)
-            return original_execute(self, *args, path=safe_path, **kwargs)
+    @classmethod
+    def _overwrite_execute(cls):
+        sig = inspect.signature(cls.safe_execute)
+        annotations = get_type_hints(cls.safe_execute, include_extras=True)
+        annotations["path"].__origin__ = str
 
-        cls.execute = safe_execute
+        path_param_index = list(sig.parameters).index("path")
+        # Copy signature and update path default
+        parameters = list(sig.parameters.values())
+        prev = parameters[path_param_index]
+        parameters[path_param_index] = prev.replace(
+            annotation=annotations["path"],
+            default=str(prev.default) if prev.default is not inspect.Parameter.empty else prev.default,
+        )
+        new_sig = sig.replace(parameters=parameters)
 
-    def _validate_and_resolve_path(self, path: str) -> str:
-        safe_path = os.path.abspath(os.path.join(self.work_dir, path))
+        print(new_sig)
 
-        if self.raise_on_404 and not os.path.exists(safe_path):
-            raise ValueError("File does not exist at path: " + path)
+        # New execute method for the subclass
+        def execute(self: cls, *args, **kwargs):
+            # Transform path argument
+            bound_args = new_sig.bind(*args, **kwargs)
+            bound_args.apply_defaults()
 
-        if not os.path.commonpath([safe_path, self.work_dir]) == self.work_dir:
-            raise ValueError("Access denied: Attempted access outside of working directory at path: " + path)
+            path = bound_args.arguments["path"]
+            full_path = self._validate_and_resolve_path(path)
+            bound_args.arguments["path"] = full_path
 
-        if os.path.islink(safe_path):
-            raise ValueError("Security alert: Path is a symbolic link at path: " + path)
+            return cls.safe_execute(*bound_args.args, **bound_args.kwargs)
 
-        return safe_path
+        # Apply annotations and signature to the new execute method
+        execute.__annotations__ = annotations
+        execute.__signature__ = new_sig
+        return execute
+
+    @abstractmethod
+    def safe_execute(self, path: Annotated[Path, ...], *args, **kwargs): ...
+
+    def execute(self, *args, **kwargs): ...
+
+    def _validate_and_resolve_path(self, path: str) -> Path:
+        full_path = self.work_dir / path
+
+        if self.raise_on_404 and not full_path.exists():
+            raise ValueError(f"File does not exist at path: {path}")
+
+        # Check if path is inside the working directory with pathlib
+        if not full_path.is_relative_to(self.work_dir):
+            raise ValueError(f"Access denied: Attempted access outside of working directory at path: {path}")
+
+        # Check if path is symbolic link
+        if full_path.is_symlink():
+            raise ValueError(f"Security alert: Path is a symbolic link at path: {path}")
+
+        return full_path.resolve()
 
 
 class ListDirSkill(SafePathSkill):
     description = "List the content of a directory."
     raise_on_404 = True
 
-    def execute(self, path: Annotated[str, "Path of directory to list"]) -> list[str]:
+    def safe_execute(self, path: Annotated[Path, "Path of directory to list"] = Path("")) -> List[str]:
         """List the content of a directory"""
         return os.listdir(path)
 
 
+class DirTreePrefix(str, Enum):
+    SPACE = "    "
+    BRANCH = "│   "
+    # pointers:
+    TEE = "├── "
+    LAST = "└── "
+
+
+class DirTreeSkill(Skill):
+    description = "Get the full directory tree of the working directory. (all files and directories)"
+
+    def __init__(self, work_dir: Path, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.work_dir = work_dir
+
+    def execute(self) -> str:
+        """Get the full directory tree"""
+        tree = self.rec_tree(self.work_dir)
+        return "\n".join(tree)
+
+    def rec_tree(self, dir_path: Path, prefix: str = ""):
+        """Recursively get the full directory tree"""
+        contents = list(dir_path.iterdir())
+        pointers = [DirTreePrefix.TEE] * (len(contents) - 1) + [DirTreePrefix.LAST]
+        for pointer, path in zip(pointers, contents):
+            yield prefix + pointer.value + path.name
+            if path.is_dir():
+                extension = DirTreePrefix.BRANCH if pointer == DirTreePrefix.TEE else DirTreePrefix.SPACE
+                yield from self.rec_tree(path, prefix=prefix + extension.value)
+
+
 class ReadFileSkill(SafePathSkill):
-    description = "Read the content of a file."
+    description = "Read the content of a file with line numbers."
     raise_on_404 = True
 
-    def execute(self, path: Annotated[str, "Path of file to read"]) -> str:
-        """Read the content of a file"""
+    def safe_execute(self, path: Annotated[Path, "Path of file to read"]) -> str:
+        """Read the content of a file and return it with line numbers"""
         with open(path, "r") as file:
-            return file.read()
+            lines = file.readlines()
+
+        for i, line in enumerate(lines):
+            lines[i] = f"{i+1}: {line}"
+
+        return "".join(lines)
 
 
-class OverwriteFileSkill(SafePathSkill):
-    description = "Overwrite the content of a file."
+class CreateOrOverwriteFileSkill(SafePathSkill):
+    description = "Create or overwrite a file."
 
-    def execute(
+    def safe_execute(
         self,
-        path: Annotated[str, "Path of file to overwrite"],
+        path: Annotated[Path, "Path of file to create or overwrite"],
         content: Annotated[str, "Content to write to file"],
     ) -> str:
-        """Overwrite the content of a file"""
-        dir_path = os.path.dirname(path)
-        if not os.path.exists(dir_path):
-            os.makedirs(dir_path, exist_ok=True)
+        """Create and overwrite a file"""
+        if not path.parent.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(path, "w") as file:
             file.write(content)
 
-        return f"File successfully overwritten"
+        return "File successfully written"
 
 
 class FileAction(Enum):
@@ -101,10 +177,10 @@ class ModifyFileSkill(SafePathSkill):
     description = "Modify the content of a file."
     raise_on_404 = True
 
-    def execute(
+    def safe_execute(
         self,
-        path: Annotated[str, "Path of file to modify"],
-        changes: Annotated[list[FileChange], "List of changes to apply to the file"],
+        path: Annotated[Path, "Path of file to modify"],
+        changes: Annotated[List[FileChange], "List of changes to apply to the file"],
     ) -> str:
         """Modify the content of a file"""
         with open(path, "r") as file:
@@ -136,24 +212,30 @@ class DeleteFileOrDirSkill(SafePathSkill):
     description = "Delete a file or directory."
     raise_on_404 = True
 
-    def execute(self, path: Annotated[str, "Path of file or directory to delete"]) -> str:
+    def safe_execute(self, path: Annotated[Path, "Path of file or directory to delete"]) -> str:
         """Delete a file or directory"""
-        if os.path.isfile(path):
-            os.remove(path)
-        else:
-            os.rmdir(path)
+        if path.is_file():
+            path.unlink()
+        elif path.is_dir():
+            shutil.rmtree(path)
 
         return f"{path} successfully deleted"
 
 
 class CodingSkillSet(SkillSet):
-    def __init__(self, work_dir: str) -> None:
+    def __init__(self, work_dir: Path) -> None:
         self.work_dir = work_dir
         super().__init__()
 
     @property
     def skill_set(self):
-        return [ListDirSkill, ReadFileSkill, OverwriteFileSkill, ModifyFileSkill, DeleteFileOrDirSkill]
+        return [
+            ListDirSkill,
+            ReadFileSkill,
+            CreateOrOverwriteFileSkill,
+            ModifyFileSkill,
+            DeleteFileOrDirSkill,
+        ] + [DirTreeSkill]
 
-    def init_skills(self) -> list[Skill]:
+    def init_skills(self) -> List[Skill]:
         return [skill(work_dir=self.work_dir) for skill in self.skill_set]

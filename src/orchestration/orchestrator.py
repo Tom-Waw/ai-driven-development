@@ -32,7 +32,7 @@ class Orchestrator:
         self.log_dir = log_dir
 
         # List of raw messages
-        self.messages: list[str | dict] = []
+        self.messages: List[str | dict] = []
         # List of chats for logging
         self.chats: List[ChatMessage] = []
 

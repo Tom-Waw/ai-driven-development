@@ -9,7 +9,7 @@ class UnitTestSkill(SafePathSkill):
     description = "Run all tests inside a test script or directory."
     raise_on_404 = True
 
-    def execute_safe(self, path: Annotated[str, "Path for test discovery"]) -> str:
+    def execute(self, path: Annotated[str, "Path for test discovery"]) -> str:
         """Run a test script"""
         try:
             test_loader = TestLoader()

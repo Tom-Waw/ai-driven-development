@@ -1,6 +1,6 @@
 import subprocess
 from abc import ABC, abstractmethod
-from typing import Annotated
+from typing import Annotated, List
 
 from settings import Settings
 from skills.base import Skill, SkillSet
@@ -9,12 +9,12 @@ from skills.base import Skill, SkillSet
 class ListPackagesSkill(Skill):
     description = "List all installed python packages related to the task."
 
-    def execute(self) -> list[str]:
+    def execute(self) -> List[str]:
         """List all installed python packages by reading requirements.txt."""
         return self.list_python_packages()
 
     @staticmethod
-    def list_python_packages() -> list[str]:
+    def list_python_packages() -> List[str]:
         """List all installed python packages by reading requirements.txt."""
         with open(Settings.REQUIREMENTS_FILE, "r") as file:
             packages = file.readlines()
@@ -40,13 +40,13 @@ class ManagePackageSkill(Skill, ABC):
         return result
 
     @abstractmethod
-    def command(self, package: str, packages: list[str]) -> str: ...
+    def command(self, package: str, packages: List[str]) -> str: ...
 
 
 class InstallPackageSkill(ManagePackageSkill):
     description = "Install a python package and add it to requirements.txt."
 
-    def command(self, package: str, packages: list[str]) -> str:
+    def command(self, package: str, packages: List[str]) -> str:
         """Install a python package and add it to the packages list."""
         # Check if the package is already installed
         if any(package in p for p in packages):
@@ -61,7 +61,7 @@ class InstallPackageSkill(ManagePackageSkill):
 class UninstallPackageSkill(ManagePackageSkill):
     description = "Uninstall a python package and remove it from requirements.txt."
 
-    def command(self, package: str, packages: list[str]) -> str:
+    def command(self, package: str, packages: List[str]) -> str:
         """Uninstall a python package and remove it from the packages list."""
         # Check if the package is installed
         if all(package not in p for p in packages):
@@ -75,7 +75,7 @@ class UninstallPackageSkill(ManagePackageSkill):
 
 class PipSkillSet(SkillSet):
     @property
-    def skill_set(self) -> list[type[Skill]]:
+    def skill_set(self) -> List[type[Skill]]:
         return [
             ListPackagesSkill,
             InstallPackageSkill,

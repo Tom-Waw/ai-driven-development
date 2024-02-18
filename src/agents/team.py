@@ -1,4 +1,5 @@
 from abc import ABC
+from typing import List
 
 from autogen import ConversableAgent, UserProxyAgent
 
@@ -7,7 +8,7 @@ USER_PROXY_PROMPT = "A human admin. Discuss the plan. Plan execution needs to be
 
 class Team(ABC):
     @classmethod
-    def build_agents(cls, *args, **kwargs) -> list[ConversableAgent]:
+    def build_agents(cls, *args, **kwargs) -> List[ConversableAgent]:
         return [
             UserProxyAgent(
                 name="Admin",

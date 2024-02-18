@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from functools import wraps
+from typing import List, Type
 
 from autogen import ConversableAgent, agentchat
 from typing_extensions import Self
@@ -13,11 +14,14 @@ class Skill(ABC):
 
     def register_agents(self, caller: ConversableAgent, executor: ConversableAgent) -> None:
         @wraps(self.execute)
-        def proxy(*args, **kwargs):
+        def function_proxy(*args, **kwargs):
             return self.execute(*args, **kwargs)
 
+        # Name the function after the class name
+        function_proxy.__name__ = self.__class__.__name__
+
         agentchat.register_function(
-            proxy,
+            function_proxy,
             caller=caller,
             executor=executor,
             description=self.description,
@@ -30,9 +34,9 @@ class SkillSet(ABC):
 
     @property
     @abstractmethod
-    def skill_set(self) -> list[type[Skill]]: ...
+    def skill_set(self) -> List[Type[Skill]]: ...
 
-    def init_skills(self) -> list[Skill]:
+    def init_skills(self) -> List[Skill]:
         return [skill() for skill in self.skill_set]
 
     @classmethod
