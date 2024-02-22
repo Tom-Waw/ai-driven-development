@@ -1,19 +1,23 @@
-from typing import Annotated
+from typing import Annotated, List, Type
 from unittest import TestLoader, TestResult
 
 from settings import Settings
-from skills.io_skills import CodingSkillSet, SafePathSkill
+from skills.base import Skill, SkillSet
+from skills.io_skills import SafePathSkill
 
 
 class UnitTestSkill(SafePathSkill):
-    description = "Run all tests inside a test script or directory."
-    raise_on_404 = True
+    description = "Run all tests inside a test script or directory relative to the test directory."
 
     def execute(self, path: Annotated[str, "Path for test discovery"]) -> str:
         """Run a test script"""
+        full_path = self.validate_and_resolve_path(path)
+        if not full_path.exists():
+            raise ValueError(f"Path {path} does not exist")
+
         try:
             test_loader = TestLoader()
-            test_suite = test_loader.discover(path)
+            test_suite = test_loader.discover(str(full_path))
 
             test_result = TestResult()
             test_suite.run(result=test_result)
@@ -30,10 +34,14 @@ class UnitTestSkill(SafePathSkill):
             return f"Error: {e}"
 
 
-class UnitTestSkillSet(CodingSkillSet):
+class UnitTestSkillSet(SkillSet):
     def __init__(self) -> None:
-        super().__init__(work_dir=Settings.TEST_DIR)
+        self.work_dir = Settings.TEST_DIR
+        super().__init__()
 
     @property
     def skill_set(self):
-        return super().skill_set + [UnitTestSkill]
+        return [UnitTestSkill]
+
+    def init_skills(self) -> List[Skill]:
+        return [skill(work_dir=self.work_dir) for skill in self.skill_set]

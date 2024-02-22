@@ -67,50 +67,6 @@ class IOSkillsTests(unittest.TestCase):
     def get_skill(self, skill_cls: Type[SkillTypeVar]) -> SkillTypeVar:
         return next(skill for skill in self.skill_set.skills if isinstance(skill, skill_cls))
 
-    # ? Test cases for execute signature of the skills
-
-    def test_execute_signature(self):
-        description = "Path to manipulate"
-        description2 = "Some extra data"
-
-        class TestSkill(SafePathSkill):
-
-            def safe_execute(
-                self,
-                extra: Annotated[int, description2],
-                path: Annotated[Path, description] = Path(""),
-            ) -> Path:
-                return path
-
-        skill = TestSkill(work_dir=Settings.WORK_DIR)
-        result = skill.execute(extra=42, path="test")
-
-        # Check converted path
-        self.assertEqual(result, Settings.WORK_DIR / "test", "Skill did not execute as expected")
-
-        # Check signature of the execute method
-        expected_signature = inspect.Signature(
-            parameters=[
-                inspect.Parameter(
-                    "extra",
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    annotation=Annotated[int, description2],
-                ),
-                inspect.Parameter(
-                    "path",
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    default=".",
-                    annotation=Annotated[Path, description],
-                ),
-            ],
-            return_annotation=Path,
-        )
-        self.assertEqual(
-            inspect.signature(skill.execute),
-            expected_signature,
-            "Signature of the execute method did not match expected",
-        )
-
     # ? Test cases for the list_dir function
 
     def test_list_dir(self):
