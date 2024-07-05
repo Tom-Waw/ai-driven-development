@@ -16,7 +16,7 @@ class ListPackagesSkill(Skill):
     @staticmethod
     def list_python_packages() -> List[str]:
         """List all installed python packages by reading requirements.txt."""
-        with open(Settings.REQUIREMENTS_FILE, "r") as file:
+        with open(Settings.REQUIREMENTS_PATH, "r") as file:
             packages = file.readlines()
 
         # Remove the newline character from the end of each package
@@ -31,7 +31,7 @@ class ManagePackageSkill(Skill, ABC):
             result = self.command(package, packages)
 
             # Write the list back to the file
-            with open(Settings.REQUIREMENTS_FILE, "w") as file:
+            with open(Settings.REQUIREMENTS_PATH, "w") as file:
                 file.write("\n".join(packages) + "\n")
 
         except Exception as e:

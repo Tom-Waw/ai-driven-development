@@ -6,18 +6,13 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # Turns off buffering for easier container logging
 ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get install -y gcc
-
 # Install pip requirements
 RUN pip install --upgrade pip
 
 COPY requirements.txt /
 RUN pip install -r requirements.txt
 
-# LLM Configuration
-COPY OAI_CONFIG_LIST.json /
-
-WORKDIR /app
+WORKDIR /home
 COPY ./src .
 
 CMD ["python", "main.py"]

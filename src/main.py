@@ -1,108 +1,121 @@
-import shutil
+from math import e
 from pathlib import Path
 
 import autogen
 
-from agents.config import base_config
-from settings import Settings
-from skills.io_skills import CodingSkillSet
-from skills.pip_skills import PipSkillSet
-from skills.unit_test_skills import UnitTestSkillSet
+import ram
+import tools
+from config import task_config
+from lpu.standard import PROMPT_APPRECIATION_CONSTRAINT, PROMPT_END_CONVERSATION, base_config, is_termination_message
+from ram import editor
+from tools import editor_tools, ticket_tools
+
+# TODO: Build agents and teams / worklfows
+# ? Create the agents
+# ? Gather them in teams / workflows
+
+# TODO: Create tools for agents
+# ? Provide necessary tools
+# ? Register the tools to the agents
+
+# ! DONE
+# TODO: Reset the development environment
+# ? Reset session directory
+
+# TODO: Arrange the conversation in workflows
+# ? Define workflows
+# ? Define termination
+# ? Define transitions
+# ? Assign the workflows to the teams
+
+# ! DONE
+# TODO: Start the conversation
+# ? Load the task from yml
+# ? Provide the task
+# ? Start the conversation
 
 
 def main():
-    # ? Create the agents
-    user_proxy = autogen.UserProxyAgent(
-        name="user_proxy",
+    ram.reset()
+
+    user = autogen.UserProxyAgent(
+        name="User",
         human_input_mode="NEVER",
-        max_consecutive_auto_reply=10,
-        is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
+        is_termination_msg=is_termination_message,
         code_execution_config=False,
     )
 
-    project_manager = autogen.AssistantAgent(
-        name="project_manager",
-        system_message="""
-            You are the project manager of a tech company. You are responsible for the success of the project and the team.
+    assistant = autogen.AssistantAgent(
+        name="Assistant",
+        system_message="""You are a well trained professional software developer (python).
+        You are able to solve any problem that comes your way.
+        The provided functions suit you with the abilities to create and maintain software.
+        Actively use them to persist your changes.
+        Only terminate after reconfirming the files and directories you have created."""
+        + PROMPT_END_CONVERSATION
+        + PROMPT_APPRECIATION_CONSTRAINT,
+        llm_config=base_config,
+        is_termination_msg=is_termination_message,
+    )
+    for tool in [
+        editor_tools.create_dir,
+        editor_tools.create_file,
+        editor_tools.show_dir_tree,
+        editor_tools.list_dir,
+        editor_tools.read_file,
+        editor_tools.overwrite_file,
+        editor_tools.remove_lines,
+        editor_tools.insert_before_line,
+        editor_tools.delete,
+    ]:
+        tools.register_tool(user, tool, assistant)
 
-            You will receive a request from the client. Depending on the needs, you will plan the project.
-            To get the best results, you will manage your team to develop in a test driven development (TDD) environment.
-            That requires the end result to be well described before the development starts.
-
-            After the planning, you will guide the development of the project. That means, you will introduce phases and tasks to the team.
-            As each phase starts, you will explain the requirements and the features of the product to the developers.
-            Divide the tasks into tickets and assign them to the team members.
-
-            To confirm the code works as expected, run the tests with the given functions.
-            Only after the tests pass and you are satisfied with the result, you can terminate the task.
-
-            Leave the implementation to the developers. You will not interfere with the code.
-            You are provided with a function that enables you to run the tests. Do not use any other functions.
-
-            Do not show any appreciation in your messages.
-            Reply TERMINATE when the task is done at full satisfaction.
-        """,
+    documenter = autogen.AssistantAgent(
+        name="Documenter",
+        system_message="""You are a well trained professional software developer (python).
+        You are able to solve any problem that comes your way.
+        The provided functions suit you with the abilities to create and maintain software.
+        Actively use them to persist your changes.
+        Only terminate after reconfirming the files and directories you have edited."""
+        + PROMPT_END_CONVERSATION
+        + PROMPT_APPRECIATION_CONSTRAINT,
+        is_termination_msg=is_termination_message,
         llm_config=base_config,
     )
-    UnitTestSkillSet.register(caller=project_manager, executor=user_proxy)
+    for tool in [
+        editor_tools.show_dir_tree,
+        editor_tools.list_dir,
+        editor_tools.read_file,
+        # editor_tools.overwrite_file,
+        editor_tools.remove_lines,
+        editor_tools.insert_before_line,
+    ]:
+        tools.register_tool(user, tool, documenter)
 
-    programmer = autogen.AssistantAgent(
-        name="programmer",
-        system_message="""
-            You are the programmer of the team.
-            You are provided with a suite of functions that enable you to write the code into the project directory.
+    CODING_TASK = task_config.load_task("character_game")
+    CODING_TASK += "\n\n" + "For now just create the data models and classes for the game."
+    DOCUMENTATION_TASK = """Your task is to reconfirm the code of the developer and document it.
+    You can find it by checking the files in the session directory.
+    Add Docstrings to the functions and classes for better understanding.
+    You are done when you have documented all of the code.
+    Check by reading the files and confirming the documentation."""
 
-            You will receive tickets (tasks) from the project manager and you have to implement the code.
-            Make sure to strictly follow the design and interfaces the project manager has provided.
-            Your code has to pass the tests written by the tester. You can change the code as many times as necessary.
-
-            Make sure to understand the requirements of the current ticket.
-        """,
-        llm_config=base_config,
+    user.initiate_chats(
+        [
+            {
+                "recipient": assistant,
+                "message": CODING_TASK,
+                "summary_method": lambda *_: editor_tools.show_dir_tree(),
+            },
+            {
+                "recipient": documenter,
+                "message": DOCUMENTATION_TASK,
+            },
+        ]
     )
-    PipSkillSet.register(caller=programmer, executor=user_proxy)
-    CodingSkillSet.register(Settings.CODE_DIR, caller=programmer, executor=user_proxy)
 
-    tester = autogen.AssistantAgent(
-        name="tester",
-        system_message="""
-            You are the tester of the team. You are responsible for the quality of the code.
-            You are provided with a suite of functions that enable you to write the code into the test directory.
-            Exclusively use the library unittest for testing.
-
-            You will receive tickets (tasks) from the project manager and you have to implement tests for the code.
-            Make sure to strictly follow the design and interfaces the project manager has provided.
-            Cover the main requirements and edge cases.
-        """,
-        llm_config=base_config,
-    )
-    CodingSkillSet.register(Settings.TEST_DIR, caller=tester, executor=user_proxy)
-
-    groupchat = autogen.GroupChat(agents=[project_manager, programmer, tester, user_proxy], messages=[], max_round=50)
-    manager = autogen.GroupChatManager(groupchat, llm_config=base_config)
-
-    # ? Start the conversation
-    TASK = """
-        Create the files to start a FastAPI server with the following endpoints:
-        - GET /: Returns a JSON with the message "Hello, World!"
-        - GET /items: Returns a JSON with a list of items
-        - POST /items: Adds an item to the list
-        - DELETE /items: Deletes all items from the list
-    """
-    user_proxy.initiate_chat(manager, message=TASK)
-
-
-def reset_dir(path: Path):
-    if path.exists():
-        shutil.rmtree(path)
-
-    path.mkdir(parents=True, exist_ok=True)
+    ram.show()
 
 
 if __name__ == "__main__":
-    # Clean the session directory
-    reset_dir(Settings.CODE_DIR)
-    reset_dir(Settings.TEST_DIR)
-
-    # Start the conversation
     main()

@@ -1,4 +1,7 @@
-mypy
 openai
 pyautogen
+anthropic
+
+mypy
 pydantic
+pyyaml

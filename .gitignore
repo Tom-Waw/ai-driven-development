@@ -1,7 +1,5 @@
 .vscode/
 .mypy*
+.env
 
 venv/
-
-# API keys
-OAI_CONFIG_LIST*

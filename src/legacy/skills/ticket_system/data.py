@@ -1,10 +1,9 @@
 from enum import Enum
 
-from autogen import ConversableAgent
 from pydantic import BaseModel
 
 
-class TaskStatus(str, Enum):
+class TicketStatus(str, Enum):
     TODO = "todo"
     TEST_PHASE = "test_phase"
     IMPLEMENTATION_PHASE = "implementation_phase"
@@ -12,17 +11,21 @@ class TaskStatus(str, Enum):
     DONE = "done"
 
 
-class Task(BaseModel):
-    name: str
+class Ticket(BaseModel):
+    title: str
     description: str
     priority: int = 0
-    status: TaskStatus = TaskStatus.TODO
-    assignee: ConversableAgent | None = None
+    status: TicketStatus = TicketStatus.TODO
+    assignee: str | None = None
 
 
 class Project(BaseModel):
     name: str
-    description: str
-    backlog: list[Task] = []
-    sprint: list[Task] = []
-    done: list[Task] = []
+    goal: str
+    backlog: list[Ticket] = []
+    sprint: list[Ticket] = []
+    done: list[Ticket] = []
+
+
+ProjectState: Project | None = None
+
