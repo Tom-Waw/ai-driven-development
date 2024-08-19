@@ -1,9 +1,0 @@
-character_game: >
-  Create a mini game that allows the user to create a character.
-  The user can change the appearance of the character and give it a name.
-  There are three character types: warrior, mage, and rogue.
-  One can pick the character type and the character will have different stats based on the type.
-  Also each character type has unique weapons and armor to choose from.
-
-  The game should have a simple UI that allows the user to interact with the game.
-  Also the user should be able to save the character to a file and load it later or delete it.

@@ -1,0 +1,15 @@
+services:
+  aidd:
+    build: ./autogen
+    volumes:
+      - ./autogen/src:/home/app
+      - ./volumes/code:/code
+      - ./volumes/logs:/logs
+    env_file: .env
+    command: >
+      watchmedo auto-restart
+        --directory=/home/app
+        --pattern=*.py
+        --recursive
+        --no-restart-on-command-exit
+        -- python main.py

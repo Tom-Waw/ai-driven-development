@@ -1,7 +1,0 @@
-openai
-pyautogen
-anthropic
-
-mypy
-pydantic
-pyyaml
