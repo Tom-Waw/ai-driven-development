@@ -1,9 +1,10 @@
 services:
   aidd:
-    build: ./autogen
+    build: ./aidd
     volumes:
-      - ./autogen/src:/home/app
-      - ./volumes/code:/code
+      - ./aidd/src:/home/app
+      - ./volumes/code:${PROJECT_DIR}
+      - ./volumes/code_base:${PROJECT_SKELETON_DIR}
       - ./volumes/logs:/logs
     env_file: .env
     command: >

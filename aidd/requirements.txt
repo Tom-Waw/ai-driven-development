@@ -1,0 +1,15 @@
+# AI related
+openai
+anthropic
+pyautogen
+
+# Fomratting
+pydantic
+pydantic-settings
+pyyaml
+instructor
+
+# Optional
+watchdog
+mypy
+pytest
