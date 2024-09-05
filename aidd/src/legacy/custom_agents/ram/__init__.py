@@ -1,9 +1,6 @@
 import shutil
 
-from ram.ticket_system import TicketSystem
 from settings import settings
-
-ticket_system = TicketSystem()
 
 
 def reset():

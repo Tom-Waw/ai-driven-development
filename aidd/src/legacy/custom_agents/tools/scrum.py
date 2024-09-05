@@ -4,15 +4,20 @@ from pydantic import Field
 from ram import ticket_system
 from ram.ticket_system import Ticket, TicketStatus
 from tools.abc import Tool
-
-from aidd.src.tools.utils import format_ticket
+from tools.utils import format_ticket
 
 tools: list[Tool] = []
+
+
+def register_tool(tool: type[Tool]) -> type[Tool]:
+    tools.append(tool)
+    return tool
+
 
 ### CREATE ###
 
 
-@tools.append
+@register_tool
 class CreateTicket(Tool, Ticket):
     """Create a ticket and add it to the backlog."""
 
@@ -25,7 +30,7 @@ class CreateTicket(Tool, Ticket):
 ### READ ###
 
 
-@tools.append
+@register_tool
 class ShowTickets(Tool):
     """Show the tickets in a specific log."""
 
@@ -40,7 +45,7 @@ class ShowTickets(Tool):
         return "\n".join([format_ticket(ticket) for ticket in tickets])
 
 
-@tools.append
+@register_tool
 class ReadTicketDetails(Tool):
     """Read the details of a ticket."""
 
@@ -57,7 +62,7 @@ class ReadTicketDetails(Tool):
 ### UPDATE ###
 
 
-@tools.append
+@register_tool
 class MoveTicket(Tool):
     """Change the status of a ticket."""
 
@@ -76,7 +81,7 @@ class MoveTicket(Tool):
 ### DELETE ###
 
 
-@tools.append
+@register_tool
 class DeleteTicket(Tool):
     """Delete a ticket from the project. Use with caution!"""
 

@@ -1,13 +1,14 @@
-# AI related
-openai
-anthropic
-pyautogen
-
-# Fomratting
+# Formatting
 pydantic
 pydantic-settings
 pyyaml
 instructor
+
+# AI related
+openai
+anthropic
+pyautogen
+crewai[tools]
 
 # Optional
 watchdog

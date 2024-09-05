@@ -23,10 +23,10 @@ class Template:
         """Flattens a dictionary to a list of tuples (key.key.key, value)."""
         flat = {}
         for key, value in input.items():
+            flat[prefix + key] = value
+
             if isinstance(value, dict):
                 nested = self.flatten_input(value, prefix + key + ".")
                 flat.update(nested)
-            else:
-                flat[prefix + key] = value
 
         return flat

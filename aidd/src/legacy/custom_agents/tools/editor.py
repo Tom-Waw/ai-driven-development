@@ -5,7 +5,12 @@ from pydantic import Field
 from tools import utils
 from tools.abc import Tool
 
-tools: list[Tool] = []
+tools: list[type[Tool]] = []
+
+
+def register_tool(tool: type[Tool]) -> type[Tool]:
+    tools.append(tool)
+    return tool
 
 
 class PathTool(Tool, ABC):
@@ -22,22 +27,22 @@ class PathTool(Tool, ABC):
 ### CREATE ###
 
 
-@tools.append
+@register_tool
 class CreateDir(PathTool):
     """Create a directory in the working directory."""
 
-    path: str = Field(..., description="The relativ path of the directory to create.")
+    path: str = Field(description="The relativ path of the directory to create.")
 
     def call_validated(self, full_path: Path) -> str:
         full_path.mkdir(parents=True)
         return f"Directory {self.path} created."
 
 
-@tools.append
+@register_tool
 class CreateFile(PathTool):
     """Create a file in the working directory."""
 
-    path: str = Field(..., description="The relativ path of the file to create.")
+    path: str = Field(description="The relativ path of the file to create.")
 
     def call_validated(self, full_path: Path) -> str:
         full_path.touch()
@@ -47,7 +52,7 @@ class CreateFile(PathTool):
 ### READ ###
 
 
-@tools.append
+@register_tool
 class ListDir(PathTool):
     """List the content of a directory in the working directory.
     If no path is provided, the working directory is shown."""
@@ -55,10 +60,14 @@ class ListDir(PathTool):
     path: str | None = Field(None, description="The relativ path of the directory to list.")
 
     def call_validated(self, full_path: Path) -> str:
-        return "\n".join([p.name for p in full_path.iterdir()])
+        listing = "\n".join([p.name for p in full_path.iterdir()])
+        if listing:
+            return listing
+
+        return f"Directory {self.path} is empty."
 
 
-@tools.append
+# @register_tool
 class ShowDirTree(PathTool):
     """Shows a tree representation of a directory in the working directory.
     If no path is provided, the working directory is shown."""
@@ -77,35 +86,39 @@ class ShowDirTree(PathTool):
 
             content = "\n".join([xml_dir_tree(subpath, indent=indent + 1) for subpath in current.iterdir()])
             if not content:
-                return f"{prefix}<dir name='{name}'/>"
+                return f"{prefix}<dir name='{name}' empty />"
 
             return f"{prefix}<dir name='{name}'>\n{content}\n{prefix}</dir>"
 
         return xml_dir_tree(full_path)
 
 
-@tools.append
+@register_tool
 class ReadFile(PathTool):
     """Read the content of a file in the working directory."""
 
-    path: str = Field(..., description="The relativ path of the file to read.")
+    path: str = Field(description="The relativ path of the file to read.")
 
     def call_validated(self, full_path: Path) -> str:
-        return full_path.read_text()
+        content = full_path.read_text()
+        if content:
+            return content
+
+        return f"File {self.path} is empty."
 
 
 ### UPDATE ###
 
 
-@tools.append
+@register_tool
 class OverwriteContent(PathTool):
     """Overwrite the content of a file in the working directory.
     Replacing a specific content with new content.
     Indentation and line breaks are mandatory for multi-line content."""
 
-    path: str = Field(..., description="The relativ path of the file to modify.")
-    original_content: str = Field(..., description="The content to replace.")
-    modify_content: str = Field(..., description="The new content.")
+    path: str = Field(description="The relativ path of the file to modify.")
+    original_content: str = Field(description="The content to replace.")
+    modify_content: str = Field(description="The new content.")
 
     def call_validated(self, full_path: Path) -> str:
         content = full_path.read_text()
@@ -120,11 +133,11 @@ class OverwriteContent(PathTool):
 ### DELETE ###
 
 
-@tools.append
+@register_tool
 class DeletePath(PathTool):
     """Delete a file or directory in the working directory."""
 
-    path: str = Field(..., description="The relativ path of the file or directory to delete.")
+    path: str = Field(description="The relativ path of the file or directory to delete.")
 
     def call_validated(self, full_path: Path) -> str:
         full_path.unlink()

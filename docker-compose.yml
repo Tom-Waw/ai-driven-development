@@ -4,7 +4,7 @@ services:
     volumes:
       - ./aidd/src:/home/app
       - ./volumes/code:${PROJECT_DIR}
-      - ./volumes/code_base:${PROJECT_SKELETON_DIR}
+      - ./volumes/template:${TEMPLATE_DIR}
       - ./volumes/logs:/logs
     env_file: .env
     command: >

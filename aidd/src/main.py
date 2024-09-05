@@ -1,35 +1,56 @@
+import asyncio
 import traceback
 
-import ram
-from prompts.chains.planning import run_planning_chain
-
-client_request = """
-Create a mini game that allows the user to create a character.
-The user can change the appearance of the character and give it a name.
-There are three character  types: warrior, mage, and rogue.
-One can pick the character type and the character will have different stats based on the type.
-Also each character type has unique weapons and armor to choose from.
-
-The game should have a simple UI that allows the user to interact with the game.
-Also the user should be able to save the character to a file and load it later or delete it.
-"""
+import client_request
+from crew.development import dev_crew
+from crew.management import kickoff_crew, sprint_planning_crew
+from state.project_state import ProjectState
+from state.sprint import Sprint, TicketStatus
 
 
-def main():
-    project = run_planning_chain(client_request)
-    
+async def main():
+    kickoff_inputs = {"client_request": client_request.SMALL}
+    # await pipeline.process_single_kickoff(kickoff_input=kickoff_inputs)
 
-    print(project.model_dump_json(indent=2))
+    output = kickoff_crew.kickoff(inputs=kickoff_inputs)
+    project_state: ProjectState = output.pydantic
 
+    finished = False
+    while not finished:
+        output = sprint_planning_crew.kickoff(
+            inputs={"insights": project_state.model_dump_json(indent=4, exclude="current_sprint")}
+        )
+        sprint: Sprint = output.pydantic
 
-if __name__ == "__main__":
-    while True:
-        try:
-            ram.reset()
-            prompt = input("Press Enter to start the conversation... [exit to quit]\n")
-            if prompt == "exit":
+        while sprint.open_tickets:
+            ticket = sprint.open_tickets[0]
+
+            while not ticket.status == TicketStatus.DONE:
+                dev_inputs = {
+                    "project_info": project_state.model_dump_json(
+                        indent=4, include=("client_request", "goal", "requirements")
+                    ),
+                    "ticket": ticket.model_dump_json(indent=4),
+                }
+                dev_crew.kickoff(inputs=dev_inputs)
+
                 break
 
-            main()
-        except Exception as e:
-            print(traceback.format_exc())
+            break
+
+        break
+
+    print("Resulting project state:")
+    print(project_state.model_dump_json(indent=4))
+
+
+while True:
+    try:
+        prompt = input("Press Enter to start the conversation... [exit to quit]\n")
+        if prompt == "exit":
+            break
+
+        asyncio.run(main())
+
+    except Exception as e:
+        print(traceback.format_exc())
