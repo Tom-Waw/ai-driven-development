@@ -2,14 +2,13 @@ services:
   aidd:
     build: ./aidd
     volumes:
-      - ./aidd/src:/home/app
+      - ./aidd/src:/home/app/app
       - ./volumes/code:${PROJECT_DIR}
       - ./volumes/template:${TEMPLATE_DIR}
-      - ./volumes/logs:/logs
     env_file: .env
     command: >
       watchmedo auto-restart
-        --directory=/home/app
+        --directory=/home/app/app
         --pattern=*.py
         --recursive
         --no-restart-on-command-exit

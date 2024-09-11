@@ -1,3 +1,6 @@
+# Tooling
+GitPython
+
 # Formatting
 pydantic
 pydantic-settings

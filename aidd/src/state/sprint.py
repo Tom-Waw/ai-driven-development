@@ -12,8 +12,7 @@ class IDGen:
 
 
 class TicketStatus(str, Enum):
-    BACKLOG = "backlog"
-    TODO = "todo"
+    ACTIVE = "active"
     DONE = "done"
 
 
@@ -22,17 +21,20 @@ class Ticket(BaseModel):
     title: str = Field(..., description="A short title for the ticket.")
     description: str = Field(..., description="A detailed description of what needs to be done.")
     expectation: str = Field(..., description="The expected outcome of the ticket.")
-    acceptance_criteria: str = Field(..., description="The criteria that need to be met for the ticket to be considered done.")
-    status: TicketStatus = TicketStatus.TODO
+    acceptance_criteria: str = Field(
+        ..., description="The criteria that need to be met for the ticket to be considered done."
+    )
+    status: TicketStatus = TicketStatus.ACTIVE
 
 
 class Sprint(BaseModel):
+    id: int = Field(default_factory=IDGen().next_id, init=False)
     goal: str = Field(..., description="The goal of the sprint.")
     tickets: list[Ticket] = Field(default_factory=list, description="The tickets in the sprint.")
 
     @property
     def open_tickets(self) -> list[Ticket]:
-        return [ticket for ticket in self.tickets if ticket.status == TicketStatus.TODO]
+        return [ticket for ticket in self.tickets if ticket.status == TicketStatus.ACTIVE]
 
     @property
     def completed_tickets(self) -> list[Ticket]:
@@ -45,3 +47,4 @@ class Sprint(BaseModel):
 class SprintResult(BaseModel):
     sprint_goal: str = Field(..., description="The goal of the sprint.")
     retrospective: str = Field(..., description="A short summary of the retrospective meeting.")
+    project_finished: bool = Field(..., description="Whether the project was finished in this sprint.")

@@ -1,6 +1,6 @@
 import client_request
+from agency.lpu.standard import base_config, is_termination_message
 from autogen import AssistantAgent
-from lpu.standard import base_config, is_termination_message
 
 project_manager = AssistantAgent(
     name="project_manager",

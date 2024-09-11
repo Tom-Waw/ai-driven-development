@@ -6,13 +6,16 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # Turns off buffering for easier container logging
 ENV PYTHONUNBUFFERED=1
 
+# Install git
+RUN apt-get update && apt-get install -y git
+
 # Install pip requirements
 RUN pip install --upgrade pip
 
 COPY requirements.txt /
 RUN pip install -r requirements.txt
 
-WORKDIR /home/app
+WORKDIR /home/app/app
 COPY ./src .
 
 CMD ["python", "main.py"]
