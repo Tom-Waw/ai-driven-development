@@ -1,8 +1,6 @@
-import json
-
 from agency.lpu.standard import base_config
 from autogen import Agent, AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent
-from state.sprint import Sprint, Ticket
+from sprint import Sprint, Ticket
 
 planning_proxy = UserProxyAgent(
     name="SprintPlan",

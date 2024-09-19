@@ -1,6 +1,7 @@
 .vscode/
 .mypy*
 .env
+.pycache*
 
 venv/
 volumes/
