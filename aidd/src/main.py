@@ -1,101 +1,74 @@
-import sys
-
-sys.dont_write_bytecode = True
-
 import asyncio
-import json
 import traceback
 from textwrap import dedent
 
 import client_request
-
-# from agency.agents import coder, software_architect
+from agency.coding import init_coder
 from agency.lpu.standard import base_config
-from agency.tools import editor
-from agency.tools.editor import (
-    CLICommand,
-    CreateDir,
-    CreateFile,
-    DeletePath,
-    ListDir,
-    MovePath,
-    ReadFile,
-    RunCode,
-    ShowDirTree,
-    WriteContent,
-)
-from agency.tools.utils import register_langchain_tool
-from autogen import AssistantAgent, UserProxyAgent
+from agency.mangement import init_planner
+from agency.tools.utils import generate_langchain_tool_schema
+from autogen import Agent, ConversableAgent, GroupChat, GroupChatManager, UserProxyAgent
+from implementation import init_developers, run_implementation
 from langchain.tools import BaseTool
-from settings import settings
+from sprint_planning import init_planners, plan_sprint
 from state import reset
+from state.project_state import ProjectState
 from state.sprint import Sprint, SprintResult, TicketStatus
 
 
 async def main():
     # repo = state.reset(client_request=client_request.SMALL)
-    repo = reset()
-    main_branch = repo.active_branch
-    repo.index.add(["."])
-    repo.index.commit("Commit changes.")
+    reset()
 
-    coder = AssistantAgent(
-        name="Coder",
-        system_message=f"""\
-You are a coder, equipped with the knowledge and the tools to write quality code.
-Given a Ticket, you can find the best way to implement the requested feature in the code base.
+    request = client_request.SMALL
+    init_planners(request=request)
+    init_developers(request=request)
 
-Code Conventions
------------------
-{ReadFile()._run("docs/CONVENTIONS.md")}
-        """,
-        llm_config=base_config,
-    )
+    for i in range(5):
+        sprint = plan_sprint(iteration=i)
+        if sprint is None:
+            # Project finished
+            break
 
-    user = UserProxyAgent(
-        name="User",
-        human_input_mode="NEVER",
-        code_execution_config=False,
-        default_auto_reply="Keep going until you reach the goal.",
-    )
+        run_implementation(sprint=sprint)
 
-    tools: list[BaseTool] = [
-        CreateDir(),
-        CreateFile(),
-        ListDir(),
-        ShowDirTree(),
-        ReadFile(),
-        WriteContent(),
-        MovePath(),
-        DeletePath(),
-        CLICommand(),
-        RunCode(),
-    ]
+        print(f"""\
+Sprint {i} finished.
 
-    for tool in tools:
-        register_langchain_tool(tool, caller=coder, executor=user)
+{sprint.model_dump_json(indent=2)}""")
 
-    user.initiate_chat(
-        recipient=coder,
-        # max_turns=1,
-        message=dedent(
-            f"""\
-Start implementing a prototype of a snake game with a simple GUI in python (pygame).
-First plan the structure of the project and dokument it in the SW_DESIGN.md file.
-After that, start implementing the game.
-You can make general assumptions about the game, but don't go too far.
+    # user = UserProxyAgent(
+    #     name="User",
+    #     human_input_mode="NEVER",
+    #     code_execution_config=False,
+    #     default_auto_reply="Keep going until you reach the goal.",
+    # )
 
-I will not answer any questions about the game, you have to figure it out yourself.
-Write and run tests to confirm the functionality of the game.
+    # project_state = ProjectState(client_request=client_request.SMALL)
 
-If you are satisfied with the result, you can finish the project by replying with 'TERMINATE'.
+    # sprint_plan_proxy = init_planner(state=project_state)
+    # coding_proxy = init_coder(state=project_state)
 
-Working directory contents
---------------------------
-{editor.ShowDirTree()._run(None)}
-            """
-        ),
-    )
+    # def speaker_selection_method(last_speaker: Agent, groupchat: GroupChat) -> Agent | None:
+    #     if project_state.finished:
+    #         return None
+
+    #     if project_state.current_sprint is None:
+    #         return sprint_plan_proxy
+
+    #     return coding_proxy
+
+    # group_chat = GroupChat(
+    #     agents=[user, sprint_plan_proxy, coding_proxy],
+    #     messages=[],
+    #     speaker_selection_method=speaker_selection_method,
+    # )
+    # chat_manager = GroupChatManager(groupchat=group_chat)
+
+    # user.initiate_chat(
+    #     recipient=chat_manager,
+    #     message="Start the project.",
+    # )
 
     # def commit_callback(_):
     #     repo.index.add(["."])
@@ -189,14 +162,15 @@ Working directory contents
     print("Project finished.")
 
 
-while True:
-    try:
-        prompt = input("Press Enter to start the conversation... [exit to quit]\n")
-        if prompt == "exit":
-            break
+if __name__ == "__main__":
+    while True:
+        try:
+            prompt = input("Press Enter to start the conversation... [exit to quit]\n")
+            if prompt == "exit":
+                break
 
-        asyncio.run(main())
-        print("Conversation finished.")
+            asyncio.run(main())
+            print("Conversation finished.")
 
-    except Exception as e:
-        print(traceback.format_exc())
+        except Exception as e:
+            print(traceback.format_exc())

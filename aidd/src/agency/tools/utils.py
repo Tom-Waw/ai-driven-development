@@ -5,6 +5,7 @@ from typing import Annotated, get_origin
 
 from autogen import ConversableAgent
 from langchain.tools import BaseTool
+from pydantic import BaseModel
 from settings import settings
 
 
@@ -26,7 +27,7 @@ def validate_path(path: str | None = None):
     return full_path
 
 
-def generate_tool_schema(tool: BaseTool) -> dict[str, dict]:
+def generate_langchain_tool_schema(tool: BaseTool) -> dict[str, dict]:
     """Generate the OpenAI schema for the tool."""
     schema = tool.tool_call_schema.schema()
 
@@ -34,14 +35,13 @@ def generate_tool_schema(tool: BaseTool) -> dict[str, dict]:
     schema.pop("title", None)
     schema.pop("description", None)
 
-    name = tool.name.lower().replace(" ", "_")
-
-    return name, {
+    return {
         "type": "function",
         "function": {
-            "name": name,
+            "name": tool.name,
             "description": tool.description,
             "parameters": schema,
+            "additionalProperties": False,
         },
     }
 
@@ -52,9 +52,9 @@ def register_langchain_tool(
     executor: ConversableAgent,
 ):
     """Register the tool with the caller and executor."""
-    name, tool_sig = generate_tool_schema(tool)
+    tool_sig = generate_langchain_tool_schema(tool)
     caller.update_tool_signature(tool_sig, is_remove=False)
-    executor.register_function({name: tool._run})
+    executor.register_function({tool.name: tool._run})
 
 
 # def valid_path(_func=None, *, path_args: list[str] = ["path"]):

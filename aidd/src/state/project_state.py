@@ -8,3 +8,5 @@ class ProjectState(BaseModel):
 
     current_sprint: Sprint | None = Field(None, description="The current sprint of the project.")
     sprint_history: list[SprintResult] = Field([], description="The results of sprints that have been completed.")
+
+    finished: bool = Field(False, description="Whether the project is finished.")

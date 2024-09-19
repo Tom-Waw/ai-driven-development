@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     project_dir: Path
     template_dir: Path
-    ignore_dirs: list[str] = [".git", "venv", "__pycache__"]
+    ignore_dirs: list[str] = [".git", "venv", "__pycache__", ".pytest_cache"]
 
     openai_api_key: str
     openai_model_name: str = "gpt-4o-mini"
