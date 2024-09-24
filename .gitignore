@@ -4,4 +4,4 @@
 .pycache*
 
 venv/
-volumes/
+volumes/code/
