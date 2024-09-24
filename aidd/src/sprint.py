@@ -9,18 +9,30 @@ class TicketStatus(str, Enum):
     FAILED = "failed"
 
 
-class Ticket(BaseModel):
-    title: str = Field(..., description="A short title for the ticket.")
-    description: str = Field(..., description="A detailed description of what needs to be done.")
-    expectation: str = Field(..., description="The expected outcome of the ticket.")
+class TicketData(BaseModel):
+    title: str = Field(description="A short title for the ticket.")
+    description: str = Field(description="A detailed description of what needs to be done.")
     acceptance_criteria: str = Field(
-        ..., description="The criteria that need to be met for the ticket to be considered done."
+        description="The criteria that need to be met for the ticket to be considered done."
     )
+
+
+last_ticket_id = 0
+
+
+def auto_inc_ticket_id():
+    global last_ticket_id
+    last_ticket_id += 1
+    return last_ticket_id
+
+
+class Ticket(TicketData, from_attributes=True):
+    id: int = Field(default_factory=auto_inc_ticket_id)
     status: TicketStatus = TicketStatus.TODO
 
 
 class Sprint(BaseModel):
-    goal: str = Field(..., description="The goal of the sprint.")
+    goal: str = Field(description="The goal of the sprint.")
     tickets: list[Ticket] = Field(default_factory=list, description="The tickets in the sprint.")
 
     @property

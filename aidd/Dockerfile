@@ -6,8 +6,10 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # Turns off buffering for easier container logging
 ENV PYTHONUNBUFFERED=1
 
-# Install git
-RUN apt-get update && apt-get install -y git
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends apt-utils
+RUN apt-get -y install curl
+RUN apt-get install libgomp1
 
 # Install pip requirements
 RUN pip install --upgrade pip

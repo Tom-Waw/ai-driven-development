@@ -1,6 +1,6 @@
 from agency.lpu.standard import base_config
 from autogen import Agent, AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent
-from sprint import Sprint, Ticket
+from sprint import Sprint, Ticket, TicketData
 
 planning_proxy = UserProxyAgent(
     name="SprintPlan",
@@ -12,20 +12,22 @@ planner = AssistantAgent(
     name="SoftwarePlanner",
     llm_config=base_config,
     system_message="""\
-You are the project planner, responsible for task deconstruction via sprint planning.
-You have the authority to manage sprints and tickets to ensure the project is on track.
-Break down the project description into manageable milestones to validate the development team's progress.
+You are a Sprint Planning Agent.
+In an agile software development project, you are responsible for planning the project's sprints.
+Factor in the project description, the current state of the project and former sprint reviews to plan the next sprint.
+Each sprint has to focus on a specific goal, and the tickets should be planned accordingly.
 
-Given a project description, your task is to break it down into milestones and plan the sprints accordingly.
-After the development team has completed the sprint, you will be given a sprint review to evaluate the progress.
-Given that review and the client's requirements, you will adjust the project plan accordingly and initiate the next sprint.
+The order of the tickets in the sprint is important and will dictate the order of execution.
 
-When planning a sprint, take the client's requirements and the former sprint reviews into account.
-
-The Tickets will be executed in the order they are added to the sprint.
-Make a plan of the next sprint before adding tickets to it.
-Before submitting the sprint plan, ask the user to review your idea and goal for the sprint.
-You need to get the user's approval before submitting the sprint plan.""",
+Instructions
+------------
+- think of the next state the project should be in after the sprint.
+- formulate a goal for the sprint and initialize the sprint plan.
+- think of the necessary tasks to achieve the goal and the order in which they should be executed.
+- add tickets for each task to the sprint plan.
+- review the sprint plan and make sure it aligns with the sprint goal.
+- submit the sprint plan for approval by the user.
+- factor in the user's feedback and adjust the sprint plan accordingly.""",
 )
 
 
@@ -51,15 +53,6 @@ def init_sprint_plan(goal: str) -> str:
 
 
 @planning_proxy.register_for_execution()
-@planner.register_for_llm(description="Abort the current sprint planning, removing all tickets.")
-def abort_sprint_plan() -> str:
-    global new_sprint
-    new_sprint = None
-
-    return "Sprint plan aborted."
-
-
-@planning_proxy.register_for_execution()
 @planner.register_for_llm(description="Show the current version of the sprint plan.")
 def show_sprint_plan() -> str:
     global new_sprint
@@ -75,11 +68,12 @@ Current Sprint Plan
 @planner.register_for_llm(
     description="Add a ticket to the current sprint. Optionally specify the position in the sprint."
 )
-def add_ticket(ticket: Ticket, position: int = -1) -> str:
+def add_ticket(ticket: TicketData, position: int = -1) -> str:
     global new_sprint
     validate_sprint(sprint=new_sprint)
 
     # Update object
+    ticket = Ticket.model_validate(ticket)
     new_sprint.tickets.insert(position, ticket)
 
     return f"Ticket added.\n\n{show_sprint_plan()}"
@@ -87,37 +81,53 @@ def add_ticket(ticket: Ticket, position: int = -1) -> str:
 
 @planning_proxy.register_for_execution()
 @planner.register_for_llm(description="Remove a ticket from the current sprint.")
-def remove_ticket(position: int) -> str:
+def remove_ticket(id: int) -> str:
     global new_sprint
     validate_sprint(sprint=new_sprint)
 
     # Update object
-    new_sprint.tickets.pop(position)
+    ticket = new_sprint.get_ticket_by_id(id)
+    if ticket is None:
+        raise ValueError("Ticket not found.")
+    new_sprint.tickets.remove(ticket)
 
     return f"Ticket removed.\n\n{show_sprint_plan()}"
 
 
 @planning_proxy.register_for_execution()
 @planner.register_for_llm(description="Update a ticket in the current sprint.")
-def update_ticket(position: int, ticket: Ticket) -> str:
+def update_ticket(id: int, ticket: TicketData) -> str:
     global new_sprint
     validate_sprint(sprint=new_sprint)
 
     # Update object
-    new_sprint.tickets[position] = ticket
+    old_ticket = new_sprint.get_ticket_by_id(id)
+    if old_ticket is None:
+        raise ValueError("Ticket not found.")
+
+    idx = new_sprint.tickets.index(old_ticket)
+    new_sprint.tickets[idx] = old_ticket.model_copy(update=ticket.model_dump())
+    del old_ticket
 
     return f"Ticket updated.\n\n{show_sprint_plan()}"
 
 
 @planning_proxy.register_for_execution()
-@planner.register_for_llm(description="Move a tickets position in the current sprint.")
-def move_ticket(position: int, new_position: int) -> str:
+@planner.register_for_llm(description="Move a tickets position (1 based) in the current sprint.")
+def move_ticket(id: int, new_position: int) -> str:
+    if new_position < 1:
+        raise ValueError("Invalid position.")
+
     global new_sprint
     validate_sprint(sprint=new_sprint)
 
     # Update object
-    ticket = new_sprint.tickets.pop(position)
-    new_sprint.tickets.insert(new_position, ticket)
+    ticket = new_sprint.get_ticket_by_id(id)
+    if ticket is None:
+        raise ValueError("Ticket not found.")
+
+    new_sprint.tickets.remove(ticket)
+    new_sprint.tickets.insert(new_position - 1, ticket)
 
     return f"Ticket moved.\n\n{show_sprint_plan()}"
 
@@ -128,7 +138,11 @@ approval_requested = False
 @planning_proxy.register_for_execution()
 @planner.register_for_llm(description="Submit the final sprint plan for approval by the user.")
 def submit_sprint_plan() -> str:
-    global approval_requested
+    global new_sprint, approval_requested
+    validate_sprint(sprint=new_sprint)
+    if not new_sprint.tickets:
+        raise ValueError("No tickets added to the sprint plan.")
+
     approval_requested = True
 
     print(
@@ -141,6 +155,18 @@ USER APPROVAL REQUESTED
     return "Sprint plan submitted for approval."
 
 
+@planning_proxy.register_for_execution()
+@planner.register_for_llm(description="Abort the current sprint planning, removing all tickets.")
+def abort_sprint_plan() -> str:
+    global new_sprint, approval_requested
+    new_sprint = None
+    approval_requested = True
+
+    print("USER APPROVAL REQUESTED\nSprint plan aborted.")
+
+    return "Sprint plan aborted."
+
+
 ### Group Chat ###
 
 user = UserProxyAgent(
@@ -150,8 +176,14 @@ user = UserProxyAgent(
 )
 
 
+review_requested = False
+
+
 def speaker_selection(last_speaker: Agent, groupchat: GroupChat) -> Agent | None:
-    global approval_requested
+    global approval_requested, review_requested
+    if review_requested:
+        return user
+
     if approval_requested:
         approval_requested = False
         return user
@@ -190,18 +222,20 @@ Project Request
 
 
 def plan_sprint(iteration: int) -> Sprint | None:
-    global new_sprint
+    global new_sprint, review_requested
     # Reset result object
     new_sprint = None
+    review_requested = False
 
-    if iteration > 1:
+    if iteration > 0:
         # Review Previous Sprint
+        review_requested = True
         chat_manager.initiate_chat(
             recipient=user,
             clear_history=False,
-            max_turns=1,
             message="Before starting the next sprint planning, provide a detailed review of the previous sprint.",
         )
+        review_requested = False
 
     # Plan Sprint
     chat_manager.initiate_chat(

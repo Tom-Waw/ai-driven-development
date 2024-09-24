@@ -1,0 +1,25 @@
+chat_manager (to User):
+
+Before starting the next sprint planning, provide a detailed review of the previous sprint.
+
+--------------------------------------------------------------------------------
+Replying as User. Provide feedback to chat_manager. Press enter to skip and use auto-reply, or type 'exit' to end the conversation: Traceback (most recent call last):
+  File "/home/app/app/main.py", line 58, in main
+    sprint = plan_sprint(iteration=i)
+  File "/home/app/app/agency/sprint_planning.py", line 233, in plan_sprint
+    chat_manager.initiate_chat(
+  File "/usr/local/lib/python3.10/site-packages/autogen/agentchat/conversable_agent.py", line 1102, in initiate_chat
+    self.send(msg2send, recipient, silent=silent)
+  File "/usr/local/lib/python3.10/site-packages/autogen/agentchat/conversable_agent.py", line 738, in send
+    recipient.receive(message, self, request_reply, silent)
+  File "/usr/local/lib/python3.10/site-packages/autogen/agentchat/conversable_agent.py", line 902, in receive
+    reply = self.generate_reply(messages=self.chat_messages[sender], sender=sender)
+  File "/usr/local/lib/python3.10/site-packages/autogen/agentchat/conversable_agent.py", line 2056, in generate_reply
+    final, reply = reply_func(self, messages=messages, sender=sender, config=reply_func_tuple["config"])
+  File "/usr/local/lib/python3.10/site-packages/autogen/agentchat/conversable_agent.py", line 1808, in check_termination_and_human_reply
+    reply = self.get_human_input(
+  File "/usr/local/lib/python3.10/site-packages/autogen/agentchat/conversable_agent.py", line 2182, in get_human_input
+    reply = iostream.input(prompt)
+  File "/usr/local/lib/python3.10/site-packages/autogen/io/console.py", line 43, in input
+    return input(prompt)
+KeyboardInterrupt

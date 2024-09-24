@@ -5,116 +5,39 @@ from typing import Annotated
 
 from agency import utils
 from agency.lpu.standard import base_config
-from autogen import AssistantAgent, UserProxyAgent
+from autogen import Agent, AssistantAgent, GroupChat, GroupChatManager, UserProxyAgent
 from settings import settings
 from sprint import Sprint, TicketStatus
-
-editor_exit = False
-
-
-def terminate_on_exit(msg: dict) -> bool:
-    global editor_exit
-    if editor_exit:
-        return True
-    return False
-
 
 editor_proxy = UserProxyAgent(
     name="Editor",
     human_input_mode="NEVER",
     code_execution_config=False,
-    is_termination_msg=terminate_on_exit,
+    default_auto_reply="Only submit the ticket, if you are sure that the implementation is correct.",
 )
 
 coder = AssistantAgent(
     name="Coder",
     llm_config=base_config,
     system_message=f"""\
-You are a coder, equipped with the knowledge and the tools to write quality code.
-Given a Ticket, you can find the best way to implement the requested feature in the code base.""",
+You are a Coder Agent.
+In an agile software development project, you are responsible for implementing the features requested in the tickets.
+
+Instructions
+------------
+- read the ticket description and understand the requested feature.
+- analyze the current state of the project and the code base.
+- plan the necessary changes and the best place where to implement the requested feature.
+- implement the requested feature in the code base.
+- validate that the resulting code is implemented as intended.
+- iterate on the implementation until the feature is correctly implemented.
+- submit the final solution to the ticket.
+
+Repeat these steps for each ticket you are facing.""",
 )
-
-
-@editor_proxy.register_for_execution()
-@coder.register_for_llm(description="Submit the current state of the project as the final solution to the ticket.")
-def submit_ticket() -> str:
-    global editor_exit
-    # Update object
-    editor_exit = True
-
-    return "Ticket submitted."
 
 
 ### Tools ###
-
-
-### File Operations ###
-
-
-def format_lines(content: str) -> str:
-    return "\n".join([f"{i + 1: >3}| {line}" for i, line in enumerate(content.splitlines())])
-
-
-@editor_proxy.register_for_execution()
-@coder.register_for_llm(description="Read the content of a file.")
-def read_file(path: str) -> str:
-    full_path = utils.validate_path(path)
-    content = full_path.read_text()
-    if not content:
-        return f"File {path} is empty."
-
-    return f"""\
-Content of {path}
-----------------
-{format_lines(content)}
-<<EOF"""
-
-
-@editor_proxy.register_for_execution()
-@coder.register_for_llm(
-    description="Write content to a file. Replace old piece of code with new one. Proper indentation is important."
-)
-def modify_file(
-    path: Annotated[str, "Path of the file to change."],
-    start_line: Annotated[int, "Start line number to replace with new code."],
-    end_line: Annotated[int, "End line number to replace with new code."],
-    new_code: Annotated[str, "New piece of code to replace old code with. Remember about providing indents."],
-) -> str:
-    full_path = utils.validate_path(path)
-    content = full_path.read_text()
-    lines = content.splitlines()
-
-    lines[start_line - 1 : end_line] = new_code.splitlines()
-    new_content = "\n".join(lines)
-
-    full_path.write_text(new_content)
-
-    return f"""\
-Content of {path} has been updated.
-
-{read_file(path)}"""
-
-
-@editor_proxy.register_for_execution()
-@coder.register_for_llm(
-    description="Create an new file, optionally with intial content. Good use to initialize with a template."
-)
-def create_file(path: str, initial_content: Annotated[str, "Initial content of the file."] = "") -> str:
-    full_path = utils.validate_path(path)
-    full_path.write_text(initial_content)
-
-    return f"""\
-File {path} created.
-
-{show_dir_tree()}
-
-{read_file(path)}"""
-
-
-@editor_proxy.register_for_execution()
-@coder.register_for_llm(description="Delete the content of a file.")
-
-### Directory Operations ###
 
 
 @editor_proxy.register_for_execution()
@@ -143,6 +66,120 @@ def show_dir_tree() -> str:
 Working Directory
 -----------------
 {xml_dir_tree(settings.project_dir)}"""
+
+
+def format_lines(content: str) -> str:
+    return "\n".join([f"{i + 1: >3}| {line}" for i, line in enumerate(content.splitlines())])
+
+
+@editor_proxy.register_for_execution()
+@coder.register_for_llm(description="Read the content of a file.")
+def read_file(path: str) -> str:
+    full_path = utils.validate_path(path)
+    content = full_path.read_text()
+    if not content:
+        return f"File {path} is empty."
+
+    return f"""\
+Content of {path}
+----------------
+{format_lines(content)}
+<<EOF"""
+
+
+@editor_proxy.register_for_execution()
+@coder.register_for_llm(
+    description="""\
+Write content to a file. Replace old piece of code with new one.
+Proper indentation is important.
+
+Example: modify function to take name as argument
+def say_hello():
+    print("Hello, World!")
+<<EOF
+
+start_line: 1
+end_line: 2
+new_code: "def say_hello(name='Jon Doe'):\n    print(f'Hello, {{name}}!')"
+
+Result
+def say_hello(name="Jon Doe"):
+    print(f'Hello, {{name}}!')
+<<EOF
+
+Note: original code block was replaced with new one, content "" for removing lines
+
+Example: previous result, add function
+
+start_line: 3
+end_line: 3
+new_code: "\ndef say_goodbye(name='Jon Doe'):\n    print(f'Goodbye, {{name}}!')\n"
+
+Result
+def say_hello(name="Jon Doe"):
+    print(f'Hello, {{name}}!')
+
+def say_goodbye(name="Jon Doe"):
+    print(f'Goodbye, {{name}}!')
+<<EOF
+
+Note: added initial newline, line number not present before, but added now
+
+Example: previous result, Add import statement at beginning
+
+start_line: 1
+end_line: 1
+new_code: "import os\n\ndef say_hello(name='Jon Doe'):"
+
+Note: Repeated first line, otherwise would be removed"""
+)
+def modify_file(
+    path: Annotated[str, "Path of the file to change."],
+    start_line: Annotated[int, "Start line number to replace with new code."],
+    end_line: Annotated[int, "End line number to replace with new code."],
+    new_code: Annotated[str, "New piece of code to replace old code with. Remember about providing indents."],
+) -> str:
+    full_path = utils.validate_path(path)
+    content = full_path.read_text()
+    lines = content.splitlines()
+
+    lines[start_line - 1 : end_line] = new_code.splitlines()
+    new_content = "\n".join(lines)
+
+    full_path.write_text(new_content)
+
+    return f"""\
+Content of {path} has been updated.
+
+{read_file(path)}"""
+
+
+@editor_proxy.register_for_execution()
+@coder.register_for_llm(description="Overwrite the content of a file with new content. The old content will be lost.")
+def overwrite_file(path: str, new_content: Annotated[str, "New content of the file."]) -> str:
+    full_path = utils.validate_path(path)
+    full_path.write_text(new_content)
+
+    return f"""\
+Content of {path} has been updated.
+
+{read_file(path)}"""
+
+
+@editor_proxy.register_for_execution()
+@coder.register_for_llm(
+    description="Create an new file, optionally with intial content. Good use to initialize with a template."
+)
+def create_file(path: str, initial_content: Annotated[str, "Initial content of the file."] = "") -> str:
+    full_path = utils.validate_path(path)
+    full_path.write_text(initial_content)
+
+    return f"""\
+File {path} created.
+
+{show_dir_tree()}
+
+{read_file(path)}"""
 
 
 @editor_proxy.register_for_execution()
@@ -212,6 +249,44 @@ Test output
 {output}"""
 
 
+editor_exit = False
+
+
+@editor_proxy.register_for_execution()
+@coder.register_for_llm(description="Submit the current state of the project as the final solution to the ticket.")
+def submit_ticket() -> str:
+    global editor_exit
+    # Update object
+    editor_exit = True
+
+    return "Ticket submitted."
+
+
+### Group Chat ###
+
+
+def speaker_selection(last_speaker: Agent, groupchat: GroupChat) -> Agent | None:
+    global editor_exit
+    if editor_exit:
+        return None
+
+    if last_speaker == coder:
+        return editor_proxy
+
+    return coder
+
+
+planning_group = GroupChat(
+    agents=[editor_proxy, coder],
+    messages=[],
+    max_round=100,
+    speaker_selection_method=speaker_selection,
+)
+chat_manager = GroupChatManager(
+    groupchat=planning_group,
+)
+
+
 ### Main Functions ###
 
 
@@ -245,7 +320,7 @@ Current Sprint Goal
     for ticket in sprint.open_tickets:
         # Reset result object
         editor_exit = False
-        editor_proxy.initiate_chat(
+        chat_manager.initiate_chat(
             recipient=coder,
             clear_history=False,
             max_turns=100,

@@ -12,8 +12,7 @@ class Settings(BaseSettings):
     openai_api_key: str
     openai_model_name: str = "gpt-4o-mini"
 
-    main_branch: str = "main"
-    ticket_prefix: str = "ticket-"
+    logfile: str = "logs"
 
 
 settings = Settings()

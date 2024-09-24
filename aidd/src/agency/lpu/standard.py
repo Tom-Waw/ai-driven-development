@@ -1,10 +1,9 @@
-import os
+from settings import settings
 
-MODEL = "gpt-4o-mini"
 config_list = [
     {
-        "model": MODEL,
-        "api_key": os.getenv("OPENAI_API_KEY"),
+        "model": settings.openai_model_name,
+        "api_key": settings.openai_api_key,
     }
 ]
 
