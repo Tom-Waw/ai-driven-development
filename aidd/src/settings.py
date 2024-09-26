@@ -5,8 +5,8 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    project_dir: Path
-    template_dir: Path
+    project_dir: Path = Path("/home/app/code")
+    template_dir: Path = Path("/home/app/template")
     ignore_dirs: list[str] = [".git", "venv", "__pycache__", ".pytest_cache"]
 
     openai_api_key: str
